@@ -1,0 +1,1 @@
+export type SqlValue = string | string[] | number | boolean | null | Date;
