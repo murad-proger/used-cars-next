@@ -4,11 +4,10 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import ProductForm from "../../ProductForm";
 import { db } from "@/lib/db";
 import { Product } from "@/@types/product";
-import type { RowDataPacket } from "mysql2";
 
 type Props = { params: { id: string } };
 
-type ProductRow = RowDataPacket & {
+type ProductRow = {
   id: number;
   brand: string;
   model: string;
@@ -44,7 +43,7 @@ export default async function EditProductPage({ params }: Props) {
     redirect("/admin/products");
   }
 
-  const [rows] = await db.execute<ProductRow[]>(
+  const [rows] = await db.execute<ProductRow>(
     `
     SELECT
       id,
@@ -67,7 +66,7 @@ export default async function EditProductPage({ params }: Props) {
       raiting,
       added
     FROM products
-    WHERE id = ?
+    WHERE id = $1
     `,
     [id],
   );

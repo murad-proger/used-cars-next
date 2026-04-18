@@ -10,7 +10,10 @@ export default function AddToCartButton({ productId }: { productId: number }) {
   useEffect(() => {
     async function checkInCart() {
       const res = await fetch("/api/cart", { cache: "no-store" });
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.error("Failed to fetch cart");
+        return;
+      }
 
       const data: { items: Product[] } = await res.json();
       if (data.items?.some((item) => item.id === productId)) {

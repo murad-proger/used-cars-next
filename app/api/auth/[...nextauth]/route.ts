@@ -2,9 +2,8 @@ import NextAuth, { AuthOptions, User } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
 import { db } from "@/lib/db";
-import { RowDataPacket } from "mysql2";
 
-type UserRow = RowDataPacket & {
+type UserRow = {
   id: number;
   name: string;
   email: string;
@@ -28,8 +27,8 @@ export const authOptions: AuthOptions = {
       async authorize(credentials): Promise<AuthUser | null> {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const [rows] = await db.query<UserRow[]>(
-          "SELECT * FROM users WHERE email = ? LIMIT 1",
+        const [rows] = await db.query<UserRow>(
+          "SELECT * FROM users WHERE email = $1 LIMIT 1",
           [credentials.email]
         );
 

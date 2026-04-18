@@ -2,13 +2,16 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
-import { RowDataPacket } from "mysql2";
 
-type CartRow = RowDataPacket & {
+type CartRow = {
   id: number;
   user_id: number;
   status: "active" | "ordered";
   created_at: string;
+};
+
+type CountRow = {
+  count: string;
 };
 
 export async function GET() {
@@ -17,22 +20,22 @@ export async function GET() {
 
   const userId = Number(session.user.id);
 
-  // Получаем активную корзину пользователя
-  const [cartRows] = await db.query<CartRow[]>(
-    `SELECT * FROM carts WHERE user_id = ? AND status = 'active'`,
+  // ACTIVE CART
+  const [cartRows] = await db.query<CartRow>(
+    `SELECT * FROM carts WHERE user_id = $1 AND status = 'active'`,
     [userId]
   );
 
   const cart = cartRows[0];
   if (!cart) return NextResponse.json({ count: 0 });
 
-  // Считаем количество товаров в cart_items
-  const [items] = await db.query<RowDataPacket[]>(
-    `SELECT COUNT(*) as count FROM cart_items WHERE cart_id = ?`,
+  // COUNT ITEMS
+  const [itemsRows] = await db.query<CountRow>(
+    `SELECT COUNT(*)::text as count FROM cart_items WHERE cart_id = $1`,
     [cart.id]
   );
 
-  const count = Number(items[0].count) || 0;
+  const count = Number(itemsRows[0]?.count) || 0;
 
   return NextResponse.json({ count });
 }

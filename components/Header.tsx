@@ -20,9 +20,7 @@ export default function Header() {
     ...(session?.user?.role === "ADMIN" ? [{ name: "Admin Kabineti", href: "/admin" }] : []),
   ];
 
-  // -----------------------------
   // Fetch количества товаров в корзине
-  // -----------------------------
   useEffect(() => {
     async function fetchCount() {
       try {

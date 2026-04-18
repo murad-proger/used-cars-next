@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcrypt";
 import { db } from "@/lib/db";
-import { RowDataPacket } from "mysql2";
 
-type UserRow = RowDataPacket & { id: number };
+type UserRow = {
+  id: number;
+};
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
 
     // Проверяем, есть ли уже пользователь
     const [rows] = await db.query<UserRow[]>(
-      "SELECT id FROM users WHERE email = ?",
+      "SELECT id FROM users WHERE email = $1",
       [email]
     );
 
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await db.query(
-      "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)",
+      "INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)",
       [name, email, hashedPassword, "USER"]
     );
 

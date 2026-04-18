@@ -2,18 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
-import { RowDataPacket, ResultSetHeader } from "mysql2";
 
-// Тип для строки корзины из базы
-type CartRow = RowDataPacket & {
-  id: number;
-  user_id: number;
-  status: "active" | "ordered";
-  created_at: string;
-};
-
-// Тип для создаваемой вручную корзины
-type Cart = {
+type CartRow = {
   id: number;
   user_id: number;
   status: "active" | "ordered";
@@ -21,52 +11,76 @@ type Cart = {
 };
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
 
-  // Приводим userId к числу, т.к. в базе INT
-  const userId = Number(session.user.id);
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const { productId } = await req.json();
+    const userId = Number(session.user.id);
 
-  // SELECT активной корзины
-  const [cartRows] = await db.query<CartRow[]>(
-    `SELECT * FROM carts WHERE user_id = ? AND status = 'active'`,
-    [userId]
-  );
+    const body = await req.json();
+    const productId = Number(body.productId);
 
-  // Переменная cart может быть либо CartRow из базы, либо Cart созданная вручную
-  let cart: CartRow | Cart = cartRows[0];
+    if (!productId) {
+      return NextResponse.json(
+        { error: "Invalid productId" },
+        { status: 400 }
+      );
+    }
 
-  // Если нет корзины — создаем
-  if (!cart) {
-    const [result] = await db.query<ResultSetHeader>(
-      `INSERT INTO carts (user_id) VALUES (?)`,
+    const [cartRows] = await db.query<CartRow>(
+      `SELECT * FROM carts WHERE user_id = $1 AND status = 'active'`,
       [userId]
     );
 
-    cart = {
-      id: Number(result.insertId), // приводим insertId к number
-      user_id: userId,
-      status: "active",
-      created_at: new Date().toISOString(),
-    };
-  }
+    let cart = cartRows[0];
 
-  // Проверяем, есть ли товар уже в корзине
-  const [existingRows] = await db.query<RowDataPacket[]>(
-    `SELECT * FROM cart_items WHERE cart_id = ? AND product_id = ?`,
-    [cart.id, productId]
-  );
+    if (!cart) {
+      const [created] = await db.query<CartRow>(
+        `INSERT INTO carts (user_id, status)
+         VALUES ($1, 'active')
+         RETURNING id, user_id, status, created_at`,
+        [userId]
+      );
 
-  if (existingRows.length === 0) {
-    await db.query(
-      `INSERT INTO cart_items (cart_id, product_id) VALUES (?, ?)`,
+      cart = created[0];
+    }
+
+    if (!cart) {
+      return NextResponse.json(
+        { error: "Cart creation failed" },
+        { status: 500 }
+      );
+    }
+
+    const [existing] = await db.query<{ id: number }>(
+      `SELECT id FROM cart_items
+       WHERE cart_id = $1 AND product_id = $2`,
       [cart.id, productId]
     );
-    await db.query(`UPDATE products SET added = 1 WHERE id = ?`, [productId]);
-  }
 
-  return NextResponse.json({ success: true });
+    if (existing.length === 0) {
+      await db.query(
+        `INSERT INTO cart_items (cart_id, product_id)
+         VALUES ($1, $2)`,
+        [cart.id, productId]
+      );
+
+      await db.query(
+        `UPDATE products SET added = 1 WHERE id = $1`,
+        [productId]
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("CART ADD ERROR:", error);
+
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
 }

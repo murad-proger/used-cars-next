@@ -1,6 +1,5 @@
 import { db } from "@/lib/db";
 import { Product } from "@/@types/product";
-import { SqlValue } from "@/@types/sqlVaule";
 import Filters from "@/components/Filters";
 import Products from "@/components/Products";
 import BreadCrumbs from "@/components/BreadCrumbs";
@@ -8,18 +7,18 @@ import BreadCrumbs from "@/components/BreadCrumbs";
 export default async function Catalog({
   searchParams: searchParamsPromise,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const conditions: string[] = [];
-  const values: SqlValue[] = [];
+  const values: (string | number)[] = [];
 
   const searchParams = await searchParamsPromise;
 
   const sort =
-  typeof searchParams.sort === "string"
-    ? searchParams.sort
-    : undefined;
-  
+    typeof searchParams.sort === "string"
+      ? searchParams.sort
+      : undefined;
+
   const brand =
     typeof searchParams?.brand === "string" && searchParams.brand !== "all"
       ? searchParams.brand
@@ -34,17 +33,23 @@ export default async function Catalog({
         : []
       : [];
 
+  // BRAND
   if (brand) {
-    conditions.push("brand = ?");
     values.push(brand);
+    conditions.push(`brand = $${values.length}`);
   }
 
+  // MODELS
   if (selectedModels.length > 0) {
-    const placeholders = selectedModels.map(() => "?").join(", ");
-    conditions.push(`model IN (${placeholders})`);
     values.push(...selectedModels);
+    const placeholders = selectedModels
+      .map((_, i) => `$${values.length - selectedModels.length + i + 1}`)
+      .join(", ");
+
+    conditions.push(`model IN (${placeholders})`);
   }
 
+  // PRICE
   const priceMin =
     typeof searchParams.priceMin === "string"
       ? Number(searchParams.priceMin)
@@ -54,12 +59,13 @@ export default async function Catalog({
     typeof searchParams.priceMax === "string"
       ? Number(searchParams.priceMax)
       : 2000000;
-  
+
   if (!Number.isNaN(priceMin) && !Number.isNaN(priceMax)) {
-    conditions.push("price BETWEEN ? AND ?");
     values.push(priceMin, priceMax);
+    conditions.push(`price BETWEEN $${values.length - 1} AND $${values.length}`);
   }
 
+  // ENGINE
   const engineMin =
     typeof searchParams.engineMin === "string"
       ? Number(searchParams.engineMin) / 1000
@@ -71,11 +77,14 @@ export default async function Catalog({
       : 8000;
 
   if (!Number.isNaN(engineMin) && !Number.isNaN(engineMax)) {
-    conditions.push("displacement BETWEEN ? AND ?");
     values.push(engineMin, engineMax);
+    conditions.push(
+      `displacement BETWEEN $${values.length - 1} AND $${values.length}`
+    );
   }
 
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const where =
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   let orderBy = "";
 
@@ -94,45 +103,46 @@ export default async function Catalog({
       break;
   }
 
+  // PRODUCTS
   const [cars] = await db.query(
-    `SELECT * FROM products ${where} ${orderBy}`, values
+    `SELECT * FROM products ${where} ${orderBy}`,
+    values
   );
 
   const products = cars as Product[];
 
+  // BRANDS
   const [brandsRows] = await db.query(
-    "SELECT DISTINCT brand FROM products ORDER BY brand"
+    `SELECT DISTINCT brand FROM products ORDER BY brand`
   );
 
+  // MODELS (FIXED POSTGRES STYLE)
   const [modelsRows] = await db.query(
-    `
-    SELECT DISTINCT model
-    FROM products
-    WHERE (? IS NULL OR brand = ?)
-    ORDER BY model
-    `,
-    [brand ?? null, brand ?? null]
+    brand
+      ? `SELECT DISTINCT model FROM products WHERE brand = $1 ORDER BY model`
+      : `SELECT DISTINCT model FROM products ORDER BY model`,
+    brand ? [brand] : []
   );
 
-  const brands = (brandsRows as { brand: string }[]).map(b => b.brand);
-  const models =   brand
-    ? (modelsRows as { model: string }[]).map((m) => m.model)
-    : []; // если бренд не выбран — пусто
+  const brands = (brandsRows as { brand: string }[]).map((b) => b.brand);
+
+  const models = (modelsRows as { model: string }[]).map((m) => m.model);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex min-h-screen w-full max-w-7xl flex-col items-center justify-baseline py-2 px-3 bg-white dark:bg-black sm:items-start">
-        <BreadCrumbs/>
+        <BreadCrumbs />
         <h1 className="font-bold text-3xl text-amber-600 mb-7">Catalog</h1>
+
         <div className="flex flex-col sm:flex-row gap-5 w-full">
-          <Filters 
-          brands={brands} 
-          models={models}
-          priceMin={priceMin}
-          priceMax={priceMax}
-          engineMin={engineMin}
-          engineMax={engineMax}
-        />
+          <Filters
+            brands={brands}
+            models={models}
+            priceMin={priceMin}
+            priceMax={priceMax}
+            engineMin={engineMin}
+            engineMax={engineMax}
+          />
           <Products products={products} />
         </div>
       </main>

@@ -1,4 +1,3 @@
-// app/api/products/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
@@ -34,8 +33,22 @@ export async function PUT(req: NextRequest) {
 
     await db.execute(
       `UPDATE products
-       SET brand=?, model=?, year=?, mileage=?, displacement=?, engineType=?, transmission=?, drivetrain=?, bodyType=?, color=?, steeringWheel=?, price=?, images=?, description=?, raiting=?
-       WHERE id=?`,
+      SET brand=$1,
+          model=$2,
+          year=$3,
+          mileage=$4,
+          displacement=$5,
+          engineType=$6,
+          transmission=$7,
+          drivetrain=$8,
+          bodyType=$9,
+          color=$10,
+          steeringWheel=$11,
+          price=$12,
+          images=$13,
+          description=$14,
+          raiting=$15
+      WHERE id=$16`,
       [
         brand,
         model,
@@ -73,7 +86,10 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    await db.execute("DELETE FROM products WHERE id=?", [id]);
+    await db.execute(
+      "DELETE FROM products WHERE id=$1",
+      [id]
+    );
     return NextResponse.json({ message: "Продукт удалён" });
   } catch (err) {
     console.error(err);

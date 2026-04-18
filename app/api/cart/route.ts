@@ -2,75 +2,106 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/route";
-import { RowDataPacket } from "mysql2";
 import { Product } from "@/@types/product";
 
-type CartRow = RowDataPacket & {
+type CartRow = {
   id: number;
   user_id: number;
   status: "active" | "ordered";
   created_at: string;
 };
 
+type ProductRow = {
+  id: number;
+  brand: string;
+  model: string;
+  year: number;
+  mileage: number;
+  displacement: string;
+  engineType: string;
+  transmission: string;
+  drivetrain: string;
+  bodyType: string;
+  color: string;
+  steeringWheel: string;
+  price: number;
+  images: string;
+  description: string | null;
+  liked: number;
+  popular: number;
+  raiting: number;
+  added: number;
+};
+
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!session) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
 
   const userId = Number(session.user.id);
 
-  // Активная корзина пользователя
-  const [cartRows] = await db.query<CartRow[]>(
-    `SELECT * FROM carts WHERE user_id = ? AND status = 'active'`,
+  // 1. CART
+  const [cartRows] = await db.query<CartRow>(
+    `SELECT * FROM carts WHERE user_id = $1 AND status = 'active'`,
     [userId]
   );
-  const cart = cartRows[0];
-  if (!cart) return NextResponse.json({ items: [] });
 
-  // Товары из корзины
-  const [itemsRows] = await db.query<RowDataPacket[]>(
-    `SELECT p.* 
+  const cart = cartRows[0];
+
+  if (!cart) {
+    return NextResponse.json({ items: [] });
+  }
+
+  // 2. PRODUCTS
+  const [itemsRows] = await db.query<ProductRow>(
+    `SELECT p.*
      FROM cart_items ci
      JOIN products p ON ci.product_id = p.id
-     WHERE ci.cart_id = ?`,
+     WHERE ci.cart_id = $1`,
     [cart.id]
   );
 
-  // Приведение к Product[] безопасно
   const items: Product[] = itemsRows.map((row) => {
     let images: string[] = [];
 
     if (row.images) {
       try {
-        // Если в базе хранится JSON-массив
         const parsed = JSON.parse(row.images);
-        images = Array.isArray(parsed) ? parsed : [String(row.images)];
+        images = Array.isArray(parsed)
+          ? parsed
+          : [String(row.images)];
       } catch {
-        // Если обычная строка через запятую
-        images = String(row.images).split(",").map((url) => url.trim());
+        images = String(row.images)
+          .split(",")
+          .map((url) => url.trim());
       }
     }
 
     return {
-      id: Number(row.id),
-      brand: String(row.brand),
-      model: String(row.model),
-      year: Number(row.year),
-      mileage: Number(row.mileage),
-      displacement: String(row.displacement),
-      engineType: String(row.engineType),
-      transmission: String(row.transmission),
-      drivetrain: String(row.drivetrain),
-      bodyType: String(row.bodyType),
-      color: String(row.color),
-      steeringWheel: String(row.steeringWheel),
-      price: Number(row.price),
+      id: row.id,
+      brand: row.brand,
+      model: row.model,
+      year: row.year,
+      mileage: row.mileage,
+      displacement: row.displacement,
+      engineType: row.engineType,
+      transmission: row.transmission,
+      drivetrain: row.drivetrain,
+      bodyType: row.bodyType,
+      color: row.color,
+      steeringWheel: row.steeringWheel,
+      price: row.price,
       images,
-      description: String(row.description),
-      liked: Number(row.liked),
-      popular: Number(row.popular),
-      raiting: Number(row.raiting),
-      added: Number(row.added),
+      description: row.description ?? "",
+      liked: row.liked,
+      popular: row.popular,
+      raiting: row.raiting,
+      added: row.added,
     };
   });
 

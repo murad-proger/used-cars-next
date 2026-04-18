@@ -2,9 +2,8 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
 import { db } from "@/lib/db";
-import { RowDataPacket } from "mysql2";
 
-type UserRow = RowDataPacket & {
+type UserRow = {
   id: number;
   name: string;
   email: string;
@@ -23,14 +22,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const [rows] = await db.query<UserRow[]>(
-          "SELECT * FROM users WHERE email = ? LIMIT 1",
-          [credentials.email]
+        const [rows] = await db.query<UserRow>(
+          "SELECT * FROM users WHERE email = $1 LIMIT 1",
+          [credentials.email],
         );
         const user = rows[0];
         if (!user) return null;
 
-        const isValid = await bcrypt.compare(credentials.password, user.password);
+        const isValid = await bcrypt.compare(
+          credentials.password,
+          user.password,
+        );
         if (!isValid) return null;
 
         // Приводим id к строке!

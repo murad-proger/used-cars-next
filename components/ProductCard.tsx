@@ -83,7 +83,6 @@ export default function ProductCard({ product }: ProductCardProps) {
             </span>
           </div>
 
-          {/* Показываем кнопку только если пользователь авторизован */}
           {session?.user && <AddToCartButton productId={id} />}
         </div>
       </div>

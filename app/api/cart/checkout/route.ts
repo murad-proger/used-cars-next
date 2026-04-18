@@ -1,79 +1,83 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { pg } from "@/lib/db/postgres";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
-import { RowDataPacket } from "mysql2";
 
-type CartRow = RowDataPacket & {
+type CartRow = {
   id: number;
   user_id: number;
   status: "active" | "ordered";
   created_at: string;
 };
 
+type CartItemRow = {
+  product_id: number;
+  quantity: number;
+  price: number;
+};
+
 export async function POST() {
-  const connection = await db.getConnection();
+  const client = await pg.connect();
 
   try {
     const session = await getServerSession(authOptions);
+
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const userId = Number(session.user.id);
 
-    await connection.beginTransaction();
+    await client.query("BEGIN");
 
-    // 1. Получаем активную корзину
-    const [cartRows] = await connection.query<CartRow[]>(
-      `SELECT * FROM carts WHERE user_id = ? AND status = 'active' FOR UPDATE`,
+    const cartResult = await client.query<CartRow>(
+      `SELECT * FROM carts 
+       WHERE user_id = $1 AND status = 'active'
+       FOR UPDATE`,
       [userId]
     );
 
-    const cart = cartRows[0];
+    const cart: CartRow | undefined = cartResult.rows[0];
 
     if (!cart) {
-      await connection.rollback();
+      await client.query("ROLLBACK");
       return NextResponse.json({ error: "Cart not found" }, { status: 404 });
     }
 
-    // 2. Получаем товары + цену + quantity
-    const [items] = await connection.query<RowDataPacket[]>(
+    const itemsResult = await client.query<CartItemRow>(
       `SELECT ci.product_id, ci.quantity, p.price
        FROM cart_items ci
        JOIN products p ON ci.product_id = p.id
-       WHERE ci.cart_id = ?`,
+       WHERE ci.cart_id = $1`,
       [cart.id]
     );
 
+    const items: CartItemRow[] = itemsResult.rows;
+
     if (items.length === 0) {
-      await connection.rollback();
+      await client.query("ROLLBACK");
       return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
     }
 
-    // 3. Считаем total
-    const total = items.reduce((sum, item) => {
-      return sum + Number(item.price) * Number(item.quantity || 1);
+    const total = items.reduce((sum: number, item: CartItemRow) => {
+      return sum + item.price * (item.quantity ?? 1);
     }, 0);
 
-    // 4. Меняем статус корзины → ordered
-    await connection.query(
-      `UPDATE carts SET status = 'ordered' WHERE id = ?`,
+    await client.query(
+      `UPDATE carts SET status = 'ordered' WHERE id = $1`,
       [cart.id]
     );
 
-    // 5. (опционально) сбрасываем added у товаров
-    await connection.query(
+    await client.query(
       `UPDATE products 
        SET added = 0 
        WHERE id IN (
-         SELECT product_id FROM cart_items WHERE cart_id = ?
+         SELECT product_id FROM cart_items WHERE cart_id = $1
        )`,
       [cart.id]
     );
 
-    // 6. Коммит
-    await connection.commit();
+    await client.query("COMMIT");
 
     return NextResponse.json({
       success: true,
@@ -81,7 +85,7 @@ export async function POST() {
       total,
     });
   } catch (error) {
-    await connection.rollback();
+    await client.query("ROLLBACK");
 
     console.error("CHECKOUT ERROR:", error);
 
@@ -90,6 +94,6 @@ export async function POST() {
       { status: 500 }
     );
   } finally {
-    connection.release();
+    client.release();
   }
 }

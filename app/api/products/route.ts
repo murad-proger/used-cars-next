@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import type { ResultSetHeader } from "mysql2";
 import { Product } from "@/@types/product";
+
+type InsertedProduct = {
+  id: number;
+};
 
 export async function POST(req: NextRequest) {
   try {
-    // читаем тело запроса
     const body: Partial<Product> = await req.json();
 
     const {
@@ -26,7 +28,7 @@ export async function POST(req: NextRequest) {
       raiting,
     } = body;
 
-    // проверка обязательных полей
+    // обязательные поля
     if (!brand || !model || !year || !price) {
       return NextResponse.json(
         { error: "Не все обязательные поля заполнены" },
@@ -34,16 +36,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // вставляем в базу
-    const [result] = await db.execute<ResultSetHeader>(
+    // нормализация images
+    const safeImages = Array.isArray(images) ? images : [];
+
+    const [rows] = await db.query<InsertedProduct>(
       `INSERT INTO products
-       (brand, model, year, mileage, displacement, engineType, transmission, drivetrain, bodyType, color, steeringWheel, price, images, description, raiting)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (brand, model, year, mileage, displacement, engineType, transmission, drivetrain, bodyType, color, steeringWheel, price, images, description, raiting)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      RETURNING id`,
       [
         brand,
         model,
-        year,
-        mileage || 0,
+        Number(year),
+        Number(mileage) || 0,
         displacement || "",
         engineType || "",
         transmission || "",
@@ -51,19 +56,22 @@ export async function POST(req: NextRequest) {
         bodyType || "",
         color || "",
         steeringWheel || "",
-        price,
-        JSON.stringify(images || []),
+        Number(price),
+        JSON.stringify(safeImages),
         description || "",
-        raiting || 0,
+        Number(raiting) || 0,
       ]
     );
 
+    const inserted = rows[0];
+
     return NextResponse.json({
       message: "Продукт создан",
-      id: result.insertId, // теперь TypeScript знает insertId
+      id: inserted.id,
     });
   } catch (err) {
-    console.error(err);
+    console.error("CREATE PRODUCT ERROR:", err);
+
     return NextResponse.json(
       { error: "Ошибка при создании продукта" },
       { status: 500 }

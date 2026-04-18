@@ -20,9 +20,10 @@ export default async function ProductPage({
     notFound();
   }
 
-  const [rows] = await db.query("SELECT * FROM products WHERE id = ? LIMIT 1", [
-    productId,
-  ]);
+  const [rows] = await db.query(
+    "SELECT * FROM products WHERE id = $1 LIMIT 1",
+    [productId]
+  );
 
   const product = (rows as Product[])[0];
 
