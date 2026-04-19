@@ -11,12 +11,10 @@ type UserRow = {
 };
 
 export default async function Home() {
-
-  const { data: rows, error } = await supabase
+  const { data: rows } = await supabase
     .from("users")
     .select("*");
 
-  // fallback на случай ошибки Supabase
   const users: UserRow[] = rows ?? [];
 
   return (
@@ -27,14 +25,33 @@ export default async function Home() {
           Əsas Səhifə
         </h1>
 
+        <section className="w-full mb-10 p-5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
+          <h2 className="text-xl font-semibold text-amber-600 mb-3">
+            About this project
+          </h2>
+          <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+            Hi, I’m Murad — a fullstack developer with a focus on frontend development.
+            This project is a used car marketplace built with Next.js (App Router), Supabase (PostgreSQL), and deployed on Vercel.
+          </p>
+          <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 mt-3">
+            It includes authentication (NextAuth), role-based access control (USER / ADMIN),
+            an admin dashboard with full CRUD operations, and a fully functional shopping cart system.
+          </p>
+          <p className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300 mt-3">
+            The architecture is designed with clear separation between frontend and backend logic,
+            consistent database schema in Supabase, and production deployment on Vercel.
+          </p>
+        </section>
+
+        {/* USERS SECTION */}
         <section className="w-full mb-7">
+
           <h2 className="text-2xl text-amber-600 mb-3">
             Users
           </h2>
 
           <div className="flex flex-wrap justify-center sm:justify-start gap-3">
 
-            {/* если пользователи есть → рендерим список */}
             {users.length > 0 ? (
               users.map((user) => (
                 <div
@@ -57,12 +74,12 @@ export default async function Home() {
                 </div>
               ))
             ) : (
-              // если нет пользователей
               <u>no users in db</u>
             )}
 
           </div>
         </section>
+
       </main>
     </div>
   );
