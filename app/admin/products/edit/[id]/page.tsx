@@ -5,7 +5,9 @@ import ProductForm from "../../ProductForm";
 import { supabase } from "@/lib/supabaseClient";
 import { Product } from "@/@types/product";
 
-type Props = { params: { id: string } };
+type Props = {
+  params: Promise<{ id: string }>;
+};
 
 type ProductRow = {
   id: number;
@@ -14,12 +16,12 @@ type ProductRow = {
   year: number;
   mileage: number;
   displacement: string;
-  engineType: string;
+  enginetype: string;
   transmission: string;
   drivetrain: string;
-  bodyType: string;
+  bodytype: string;
   color: string;
-  steeringWheel: string;
+  steeringwheel: string;
   price: number;
   images: string;
   description: string | null;
@@ -36,13 +38,13 @@ export default async function EditProductPage({ params }: Props) {
     redirect("/");
   }
 
-  const id = Number(params.id);
+  const { id: idStr } = await params;
+  const id = Number(idStr);
 
   if (Number.isNaN(id)) {
     redirect("/admin/products");
   }
 
-  // GET PRODUCT FROM SUPABASE
   const { data: rows, error } = await supabase
     .from("products")
     .select("*")
@@ -60,7 +62,6 @@ export default async function EditProductPage({ params }: Props) {
     redirect("/admin/products");
   }
 
-  // images normalization (string -> array)
   let images: string[] = [];
 
   if (raw.images) {
@@ -83,12 +84,12 @@ export default async function EditProductPage({ params }: Props) {
     year: raw.year,
     mileage: raw.mileage,
     displacement: raw.displacement,
-    engineType: raw.engineType,
+    engineType: raw.enginetype,
     transmission: raw.transmission,
     drivetrain: raw.drivetrain,
-    bodyType: raw.bodyType,
+    bodyType: raw.bodytype,
     color: raw.color,
-    steeringWheel: raw.steeringWheel,
+    steeringWheel: raw.steeringwheel,
     price: raw.price,
     images,
     description: raw.description ?? "",

@@ -3,46 +3,39 @@ import { supabase } from "@/lib/supabaseClient";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 
-type CartRow = {
-  id: number;
-  user_id: number;
-  status: "active" | "ordered";
-  created_at: string;
-};
-
-type CartItemWithProduct = {
+type CartItem = {
   product_id: number;
   quantity: number;
   products: {
     price: number;
-  }[];
+  }[] | null;
 };
 
 export async function POST() {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const userId = Number(session.user.id);
 
-    const { data: cartRows, error: cartError } = await supabase
+    const { data: cart, error: cartError } = await supabase
       .from("carts")
-      .select("*")
+      .select("id")
       .eq("user_id", userId)
-      .eq("status", "active");
+      .eq("status", "active")
+      .single();
 
-    if (cartError) {
-      console.error(cartError);
-      return NextResponse.json({ error: "Cart not found" }, { status: 404 });
-    }
-
-    const cart: CartRow | undefined = cartRows?.[0];
-
-    if (!cart) {
-      return NextResponse.json({ error: "Cart not found" }, { status: 404 });
+    if (cartError || !cart) {
+      return NextResponse.json(
+        { error: "Cart not found" },
+        { status: 404 }
+      );
     }
 
     const { data: items, error: itemsError } = await supabase
@@ -57,21 +50,27 @@ export async function POST() {
       .eq("cart_id", cart.id);
 
     if (itemsError) {
-      console.error(itemsError);
-      return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
+      console.error("ITEMS ERROR:", itemsError);
+      return NextResponse.json(
+        { error: "Failed to load cart items" },
+        { status: 500 }
+      );
     }
 
-    const typedItems = items as CartItemWithProduct[];
-
-    if (!typedItems || typedItems.length === 0) {
-      return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
+    // ✔ FIX: правильная проверка пустой корзины
+    if (!items || items.length === 0) {
+      return NextResponse.json(
+        { error: "Cart is empty" },
+        { status: 400 }
+      );
     }
+
+    const typedItems = items as CartItem[];
 
     const total = typedItems.reduce((sum, item) => {
-      const price = item.products?.[0]?.price;
-      if (!price) return sum;
-
-      return sum + price * (item.quantity ?? 1);
+      const price = item.products?.[0]?.price ?? 0;
+      const qty = item.quantity ?? 1;
+      return sum + price * qty;
     }, 0);
 
     const { error: updateCartError } = await supabase
@@ -95,17 +94,13 @@ export async function POST() {
       .in("id", productIds);
 
     if (updateProductsError) {
-      console.error(updateProductsError);
-      return NextResponse.json(
-        { error: "Checkout failed" },
-        { status: 500 }
-      );
+      console.error("PRODUCT UPDATE ERROR:", updateProductsError);
     }
 
     return NextResponse.json({
       success: true,
-      orderId: cart.id,
       total,
+      orderId: cart.id,
     });
   } catch (error) {
     console.error("CHECKOUT ERROR:", error);

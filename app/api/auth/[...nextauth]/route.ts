@@ -27,21 +27,15 @@ export const authOptions: AuthOptions = {
       async authorize(credentials): Promise<AuthUser | null> {
         if (!credentials?.email || !credentials?.password) return null;
 
-        // поиск пользователя в supabase
         const { data: users, error } = await supabase
           .from("users")
-          .select("*")
+          .select("id, name, email, password, role")
           .eq("email", credentials.email)
           .limit(1);
 
-        if (error) {
-          console.error(error);
-          return null;
-        }
+        if (error || !users || users.length === 0) return null;
 
-        const user: UserRow | undefined = users?.[0];
-
-        if (!user) return null;
+        const user: UserRow = users[0];
 
         const isValid = await bcrypt.compare(
           credentials.password,
@@ -65,25 +59,27 @@ export const authOptions: AuthOptions = {
   },
 
   callbacks: {
-    // добавляем данные в jwt токен
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id as string;
-        token.role = (user as AuthUser).role;
-        token.name = user.name ?? undefined;
-        token.email = user.email ?? undefined;
+        const u = user as AuthUser;
+
+        token.id = u.id;
+        token.role = u.role;
+        token.name = u.name;
+        token.email = u.email;
       }
+
       return token;
     },
 
-    // прокидываем данные в session
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as "ADMIN" | "USER";
-        session.user.name = token.name ?? undefined;
-        session.user.email = token.email ?? undefined;
-      }
+      if (!session.user) return session;
+
+      session.user.id = (token.id as string) ?? "";
+      session.user.role = (token.role as "ADMIN" | "USER") ?? "USER";
+      session.user.name = (token.name as string) ?? "";
+      session.user.email = (token.email as string) ?? "";
+
       return session;
     },
   },

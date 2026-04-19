@@ -14,9 +14,18 @@ export default function ProductsListClient({ products }: Props) {
   const handleDelete = async (id: number) => {
     if (!confirm("Вы уверены, что хотите удалить этот товар?")) return;
 
-    await fetch(`/api/products/${id}`, { method: "DELETE" });
+    const prev = items;
 
-    setItems(items.filter((p) => p.id !== id)); // удаляем карточку без перезагрузки
+    setItems((current) => current.filter((p) => p.id !== id));
+
+    const res = await fetch(`/api/products/${id}`, {
+      method: "DELETE",
+    });
+
+    if (!res.ok) {
+      alert("Ошибка удаления");
+      setItems(prev);
+    }
   };
 
   return (
@@ -27,6 +36,7 @@ export default function ProductsListClient({ products }: Props) {
       >
         Добавить новый товар
       </Link>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 my-6">
         {items.map((product) => (
           <div
@@ -44,10 +54,12 @@ export default function ProductsListClient({ products }: Props) {
                 className="object-cover rounded"
               />
             </div>
+
             <h2 className="font-semibold text-lg mt-2">{product.brand}</h2>
             <p>{product.model}</p>
             <p>{product.year} г.</p>
             <p>{product.displacement}</p>
+
             <div className="flex gap-2 mt-4">
               <Link
                 href={`/admin/products/edit/${product.id}`}
@@ -55,6 +67,7 @@ export default function ProductsListClient({ products }: Props) {
               >
                 Редактировать
               </Link>
+
               <button
                 className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
                 onClick={() => handleDelete(product.id)}

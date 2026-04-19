@@ -1,75 +1,79 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabaseClient";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 
-// type CartRow = {
-//   id: number;
-//   user_id: number;
-//   status: "active" | "ordered";
-//   created_at: string;
-// };
-
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
+  try {
+    const session = await getServerSession(authOptions);
 
-  if (!session) {
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const userId = Number(session.user.id);
+
+    const { productId } = await req.json();
+    const parsedProductId = Number(productId);
+
+    if (!parsedProductId) {
+      return NextResponse.json(
+        { error: "Invalid productId" },
+        { status: 400 }
+      );
+    }
+
+    // 1. GET ACTIVE CART (safe version)
+    const { data: cart, error: cartError } = await supabase
+      .from("carts")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .maybeSingle();
+
+    if (cartError || !cart) {
+      console.error("CART ERROR:", cartError);
+      return NextResponse.json(
+        { error: "Cart not found" },
+        { status: 404 }
+      );
+    }
+
+    // 2. DELETE ITEM FROM CART (composite key only)
+    const { error: deleteError } = await supabase
+      .from("cart_items")
+      .delete()
+      .eq("cart_id", cart.id)
+      .eq("product_id", parsedProductId);
+
+    if (deleteError) {
+      console.error("DELETE ERROR:", deleteError);
+      return NextResponse.json(
+        { error: "Failed to remove item" },
+        { status: 500 }
+      );
+    }
+
+    // 3. UPDATE PRODUCT STATE (optional business flag)
+    const { error: updateError } = await supabase
+      .from("products")
+      .update({ added: 0 })
+      .eq("id", parsedProductId);
+
+    if (updateError) {
+      console.error("PRODUCT UPDATE ERROR:", updateError);
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("CART REMOVE ERROR:", error);
+
     return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401 }
-    );
-  }
-
-  const userId = Number(session.user.id);
-  const { productId } = await req.json();
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
-  // активная корзина
-  const { data: cart, error: cartError } = await supabase
-    .from("carts")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .single();
-
-  if (cartError || !cart) {
-    return NextResponse.json(
-      { error: "Cart not found" },
-      { status: 404 }
-    );
-  }
-
-  // Удаляем товар
-  const { error: deleteError } = await supabase
-    .from("cart_items")
-    .delete()
-    .eq("cart_id", cart.id)
-    .eq("product_id", productId);
-
-  if (deleteError) {
-    console.error(deleteError);
-    return NextResponse.json(
-      { error: "Failed to remove item from cart" },
+      { error: "Internal Server Error" },
       { status: 500 }
     );
   }
-
-  const { error: updateError } = await supabase
-    .from("products")
-    .update({ added: 0 })
-    .eq("id", productId);
-
-  if (updateError) {
-    console.error(updateError);
-    return NextResponse.json(
-      { error: "Failed to update product" },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json({ success: true });
 }

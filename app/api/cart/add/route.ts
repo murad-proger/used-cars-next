@@ -3,19 +3,15 @@ import { supabase } from "@/lib/supabaseClient";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 
-type CartRow = {
-  id: number;
-  user_id: number;
-  status: "active" | "ordered";
-  created_at: string;
-};
-
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const userId = Number(session.user.id);
@@ -30,24 +26,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // GET ACTIVE CART
+    // 1. GET OR CREATE CART (active)
     const { data: cartRows, error: cartError } = await supabase
       .from("carts")
-      .select("*")
+      .select("id")
       .eq("user_id", userId)
-      .eq("status", "active");
+      .eq("status", "active")
+      .limit(1);
 
     if (cartError) {
-      console.error(cartError);
+      console.error("CART ERROR:", cartError);
       return NextResponse.json(
-        { error: "Internal Server Error" },
+        { error: "Failed to get cart" },
         { status: 500 }
       );
     }
 
-    let cart: CartRow | undefined = cartRows?.[0];
+    let cart = cartRows?.[0];
 
-    // CREATE CART IF NOT EXISTS
     if (!cart) {
       const { data: created, error: createError } = await supabase
         .from("carts")
@@ -55,10 +51,11 @@ export async function POST(req: NextRequest) {
           user_id: userId,
           status: "active",
         })
-        .select("*")
+        .select("id")
         .single();
 
       if (createError || !created) {
+        console.error("CREATE CART ERROR:", createError);
         return NextResponse.json(
           { error: "Cart creation failed" },
           { status: 500 }
@@ -68,47 +65,52 @@ export async function POST(req: NextRequest) {
       cart = created;
     }
 
-    if (!cart) {
+    // 2. CHECK EXISTING ITEM (NO cart_items.id USED)
+    const { data: existing, error: existingError } = await supabase
+      .from("cart_items")
+      .select("quantity")
+      .eq("cart_id", cart.id)
+      .eq("product_id", productId)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error("EXISTING ERROR:", existingError);
       return NextResponse.json(
-        { error: "Cart creation failed" },
+        { error: "Failed to check item" },
         { status: 500 }
       );
     }
 
-    // CHECK IF ITEM EXISTS
-    const { data: existing } = await supabase
-      .from("cart_items")
-      .select("id")
-      .eq("cart_id", cart.id)
-      .eq("product_id", productId);
+    // 3. UPSERT LOGIC (clean version)
+    if (existing) {
+      const { error: updateError } = await supabase
+        .from("cart_items")
+        .update({
+          quantity: existing.quantity + 1,
+        })
+        .eq("cart_id", cart.id)
+        .eq("product_id", productId);
 
-    if (!existing || existing.length === 0) {
-      // INSERT ITEM
+      if (updateError) {
+        console.error("UPDATE ERROR:", updateError);
+        return NextResponse.json(
+          { error: "Failed to update item" },
+          { status: 500 }
+        );
+      }
+    } else {
       const { error: insertError } = await supabase
         .from("cart_items")
         .insert({
           cart_id: cart.id,
           product_id: productId,
+          quantity: 1,
         });
 
       if (insertError) {
-        console.error(insertError);
+        console.error("INSERT ERROR:", insertError);
         return NextResponse.json(
-          { error: "Internal Server Error" },
-          { status: 500 }
-        );
-      }
-
-      // UPDATE PRODUCT FLAG
-      const { error: updateError } = await supabase
-        .from("products")
-        .update({ added: 1 })
-        .eq("id", productId);
-
-      if (updateError) {
-        console.error(updateError);
-        return NextResponse.json(
-          { error: "Internal Server Error" },
+          { error: "Failed to add item" },
           { status: 500 }
         );
       }

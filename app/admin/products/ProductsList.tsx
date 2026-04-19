@@ -9,12 +9,12 @@ type ProductRow = {
   year: number;
   mileage: number;
   displacement: string;
-  engineType: string;
+  enginetype: string;
   transmission: string;
   drivetrain: string;
-  bodyType: string;
+  bodytype: string;
   color: string;
-  steeringWheel: string;
+  steeringwheel: string;
   price: number;
   images: string;
   description: string | null;
@@ -28,7 +28,7 @@ export default async function ProductsList() {
   const { data: rows, error } = await supabase
     .from("products")
     .select(
-      "id, brand, model, year, mileage, displacement, engineType, transmission, drivetrain, bodyType, color, steeringWheel, price, images, description, liked, popular, raiting, added"
+      "id, brand, model, year, mileage, displacement, enginetype, transmission, drivetrain, bodytype, color, steeringwheel, price, images, description, liked, popular, raiting, added"
     );
 
   if (error) {
@@ -59,12 +59,12 @@ export default async function ProductsList() {
       year: row.year,
       mileage: row.mileage,
       displacement: row.displacement,
-      engineType: row.engineType,
+      engineType: row.enginetype,
       transmission: row.transmission,
       drivetrain: row.drivetrain,
-      bodyType: row.bodyType,
+      bodyType: row.bodytype,
       color: row.color,
-      steeringWheel: row.steeringWheel,
+      steeringWheel: row.steeringwheel,
       price: row.price,
       images,
       description: row.description ?? "",

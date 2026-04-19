@@ -18,12 +18,12 @@ type ProductRow = {
   year: number;
   mileage: number;
   displacement: string;
-  engineType: string;
+  enginetype: string;
   transmission: string;
   drivetrain: string;
-  bodyType: string;
+  bodytype: string;
   color: string;
-  steeringWheel: string;
+  steeringwheel: string;
   price: number;
   images: string;
   description: string | null;
@@ -40,7 +40,7 @@ type CartItemJoin = {
 export async function GET() {
   const session = await getServerSession(authOptions);
 
-  if (!session) {
+  if (!session?.user?.id) {
     return NextResponse.json(
       { error: "Unauthorized" },
       { status: 401 }
@@ -49,15 +49,15 @@ export async function GET() {
 
   const userId = Number(session.user.id);
 
-  // CART
+  // ✔ FIX: выбираем ВСЕ поля под CartRow
   const { data: cartRows, error: cartError } = await supabase
     .from("carts")
-    .select("*")
+    .select("id, user_id, status, created_at")
     .eq("user_id", userId)
     .eq("status", "active");
 
   if (cartError) {
-    console.error(cartError);
+    console.error("CART ERROR:", cartError);
     return NextResponse.json({ items: [] });
   }
 
@@ -67,10 +67,11 @@ export async function GET() {
     return NextResponse.json({ items: [] });
   }
 
-  // CART ITEMS + PRODUCTS
   const { data: itemsRows, error: itemsError } = await supabase
     .from("cart_items")
     .select(`
+      product_id,
+      quantity,
       products (
         id,
         brand,
@@ -78,12 +79,12 @@ export async function GET() {
         year,
         mileage,
         displacement,
-        engineType,
+        enginetype,
         transmission,
         drivetrain,
-        bodyType,
+        bodytype,
         color,
-        steeringWheel,
+        steeringwheel,
         price,
         images,
         description,
@@ -96,7 +97,7 @@ export async function GET() {
     .eq("cart_id", cart.id);
 
   if (itemsError) {
-    console.error(itemsError);
+    console.error("ITEMS ERROR:", itemsError);
     return NextResponse.json({ items: [] });
   }
 
@@ -127,12 +128,12 @@ export async function GET() {
       year: row.year,
       mileage: row.mileage,
       displacement: row.displacement,
-      engineType: row.engineType,
+      engineType: row.enginetype,
       transmission: row.transmission,
       drivetrain: row.drivetrain,
-      bodyType: row.bodyType,
+      bodyType: row.bodytype,
       color: row.color,
-      steeringWheel: row.steeringWheel,
+      steeringWheel: row.steeringwheel,
       price: row.price,
       images,
       description: row.description ?? "",

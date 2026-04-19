@@ -24,16 +24,12 @@ export async function POST(req: NextRequest) {
       raiting,
     } = body;
 
-    // обязательные поля
     if (!brand || !model || !year || !price) {
       return NextResponse.json(
-        { error: "Не все обязательные поля заполнены" },
+        { error: "Missing required fields" },
         { status: 400 }
       );
     }
-
-    // нормализация images
-    const safeImages = Array.isArray(images) ? images : [];
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,14 +44,16 @@ export async function POST(req: NextRequest) {
         year: Number(year),
         mileage: Number(mileage) || 0,
         displacement: displacement || "",
-        engineType: engineType || "",
+
+        enginetype: engineType || "",
         transmission: transmission || "",
         drivetrain: drivetrain || "",
-        bodyType: bodyType || "",
+        bodytype: bodyType || "",
         color: color || "",
-        steeringWheel: steeringWheel || "",
+        steeringwheel: steeringWheel || "",
+
         price: Number(price),
-        images: safeImages, // ⚠️ см. ниже
+        images: Array.isArray(images) ? images : [],
         description: description || "",
         raiting: Number(raiting) || 0,
       })
@@ -63,22 +61,22 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error || !data) {
-      console.error("CREATE PRODUCT ERROR:", error);
+      console.error("CREATE ERROR:", error);
       return NextResponse.json(
-        { error: "Ошибка при создании продукта" },
+        { error: "Create failed" },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
-      message: "Продукт создан",
+      message: "Created",
       id: data.id,
     });
   } catch (err) {
-    console.error("CREATE PRODUCT ERROR:", err);
+    console.error("POST ERROR:", err);
 
     return NextResponse.json(
-      { error: "Ошибка при создании продукта" },
+      { error: "Server error" },
       { status: 500 }
     );
   }
