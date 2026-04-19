@@ -57,7 +57,6 @@ export default async function Catalog({
       ? Number(searchParams.engineMax) / 1000
       : 8000;
 
-  // 🔹 PRODUCTS QUERY
   let query = supabase.from("products").select("*");
 
   if (brand) {
@@ -74,7 +73,6 @@ export default async function Catalog({
     .gte("displacement", engineMin)
     .lte("displacement", engineMax);
 
-  // SORT
   switch (sort) {
     case "price_asc":
       query = query.order("price", { ascending: true });
@@ -107,14 +105,13 @@ export default async function Catalog({
     ...new Set((brandsData || []).map((b) => b.brand)),
   ].sort();
 
-  // 🔹 MODELS
-  let modelsQuery = supabase.from("products").select("model");
-
-  if (brand) {
-    modelsQuery = modelsQuery.eq("brand", brand);
-  }
-
-  const { data: modelsData } = await modelsQuery;
+  // 🔹 MODELS (FIXED LOGIC)
+  const { data: modelsData } = brand
+    ? await supabase
+        .from("products")
+        .select("model")
+        .eq("brand", brand)
+    : { data: [] };
 
   const models = [
     ...new Set((modelsData || []).map((m) => m.model)),
@@ -124,7 +121,10 @@ export default async function Catalog({
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex min-h-screen w-full max-w-7xl flex-col items-center justify-baseline py-2 px-3 bg-white dark:bg-black sm:items-start">
         <BreadCrumbs />
-        <h1 className="font-bold text-3xl text-amber-600 mb-7">Catalog</h1>
+
+        <h1 className="font-bold text-3xl text-amber-600 mb-7">
+          Catalog
+        </h1>
 
         <div className="flex flex-col sm:flex-row gap-5 w-full">
           <Filters
@@ -135,6 +135,7 @@ export default async function Catalog({
             engineMin={engineMin}
             engineMax={engineMax}
           />
+
           <Products products={products} />
         </div>
       </main>
