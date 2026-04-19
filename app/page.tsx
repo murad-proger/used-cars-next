@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 
+export const dynamic = "force-dynamic";
+
 type UserRow = {
   id: number;
   name: string;
@@ -9,23 +11,30 @@ type UserRow = {
 };
 
 export default async function Home() {
+
   const { data: rows, error } = await supabase
     .from("users")
     .select("*");
 
+  // fallback на случай ошибки Supabase
   const users: UserRow[] = rows ?? [];
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex min-h-screen w-full max-w-7xl flex-col items-center justify-baseline py-2 px-3 bg-white dark:bg-black sm:items-start">
+
         <h1 className="font-bold text-3xl text-amber-600 mb-7 mt-4">
           Əsas Səhifə
         </h1>
 
         <section className="w-full mb-7">
-          <h2 className="text-2xl text-amber-600 mb-3">Users</h2>
+          <h2 className="text-2xl text-amber-600 mb-3">
+            Users
+          </h2>
 
           <div className="flex flex-wrap justify-center sm:justify-start gap-3">
+
+            {/* если пользователи есть → рендерим список */}
             {users.length > 0 ? (
               users.map((user) => (
                 <div
@@ -48,8 +57,10 @@ export default async function Home() {
                 </div>
               ))
             ) : (
+              // если нет пользователей
               <u>no users in db</u>
             )}
+
           </div>
         </section>
       </main>
