@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
 import { Product } from "@/@types/product";
-
-type InsertedProduct = {
-  id: number;
-};
+import { createClient } from "@supabase/supabase-js";
 
 export async function POST(req: NextRequest) {
   try {
@@ -39,35 +35,44 @@ export async function POST(req: NextRequest) {
     // нормализация images
     const safeImages = Array.isArray(images) ? images : [];
 
-    const [rows] = await db.query<InsertedProduct>(
-      `INSERT INTO products
-      (brand, model, year, mileage, displacement, engineType, transmission, drivetrain, bodyType, color, steeringWheel, price, images, description, raiting)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-      RETURNING id`,
-      [
-        brand,
-        model,
-        Number(year),
-        Number(mileage) || 0,
-        displacement || "",
-        engineType || "",
-        transmission || "",
-        drivetrain || "",
-        bodyType || "",
-        color || "",
-        steeringWheel || "",
-        Number(price),
-        JSON.stringify(safeImages),
-        description || "",
-        Number(raiting) || 0,
-      ]
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    const inserted = rows[0];
+    const { data, error } = await supabase
+      .from("products")
+      .insert({
+        brand,
+        model,
+        year: Number(year),
+        mileage: Number(mileage) || 0,
+        displacement: displacement || "",
+        engineType: engineType || "",
+        transmission: transmission || "",
+        drivetrain: drivetrain || "",
+        bodyType: bodyType || "",
+        color: color || "",
+        steeringWheel: steeringWheel || "",
+        price: Number(price),
+        images: safeImages, // ⚠️ см. ниже
+        description: description || "",
+        raiting: Number(raiting) || 0,
+      })
+      .select("id")
+      .single();
+
+    if (error || !data) {
+      console.error("CREATE PRODUCT ERROR:", error);
+      return NextResponse.json(
+        { error: "Ошибка при создании продукта" },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       message: "Продукт создан",
-      id: inserted.id,
+      id: data.id,
     });
   } catch (err) {
     console.error("CREATE PRODUCT ERROR:", err);

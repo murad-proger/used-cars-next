@@ -1,18 +1,22 @@
-import { db } from "@/lib/db";
 import { Product } from "@/@types/product";
 import Filters from "@/components/Filters";
 import Products from "@/components/Products";
 import BreadCrumbs from "@/components/BreadCrumbs";
+import { createClient } from "@supabase/supabase-js";
+
+export const dynamic = "force-dynamic";
 
 export default async function Catalog({
   searchParams: searchParamsPromise,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const conditions: string[] = [];
-  const values: (string | number)[] = [];
-
   const searchParams = await searchParamsPromise;
+
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   const sort =
     typeof searchParams.sort === "string"
@@ -33,23 +37,6 @@ export default async function Catalog({
         : []
       : [];
 
-  // BRAND
-  if (brand) {
-    values.push(brand);
-    conditions.push(`brand = $${values.length}`);
-  }
-
-  // MODELS
-  if (selectedModels.length > 0) {
-    values.push(...selectedModels);
-    const placeholders = selectedModels
-      .map((_, i) => `$${values.length - selectedModels.length + i + 1}`)
-      .join(", ");
-
-    conditions.push(`model IN (${placeholders})`);
-  }
-
-  // PRICE
   const priceMin =
     typeof searchParams.priceMin === "string"
       ? Number(searchParams.priceMin)
@@ -60,12 +47,6 @@ export default async function Catalog({
       ? Number(searchParams.priceMax)
       : 2000000;
 
-  if (!Number.isNaN(priceMin) && !Number.isNaN(priceMax)) {
-    values.push(priceMin, priceMax);
-    conditions.push(`price BETWEEN $${values.length - 1} AND $${values.length}`);
-  }
-
-  // ENGINE
   const engineMin =
     typeof searchParams.engineMin === "string"
       ? Number(searchParams.engineMin) / 1000
@@ -76,57 +57,68 @@ export default async function Catalog({
       ? Number(searchParams.engineMax) / 1000
       : 8000;
 
-  if (!Number.isNaN(engineMin) && !Number.isNaN(engineMax)) {
-    values.push(engineMin, engineMax);
-    conditions.push(
-      `displacement BETWEEN $${values.length - 1} AND $${values.length}`
-    );
+  // 🔹 PRODUCTS QUERY
+  let query = supabase.from("products").select("*");
+
+  if (brand) {
+    query = query.eq("brand", brand);
   }
 
-  const where =
-    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  if (selectedModels.length > 0) {
+    query = query.in("model", selectedModels);
+  }
 
-  let orderBy = "";
+  query = query
+    .gte("price", priceMin)
+    .lte("price", priceMax)
+    .gte("displacement", engineMin)
+    .lte("displacement", engineMax);
 
+  // SORT
   switch (sort) {
     case "price_asc":
-      orderBy = "ORDER BY price ASC";
+      query = query.order("price", { ascending: true });
       break;
     case "price_desc":
-      orderBy = "ORDER BY price DESC";
+      query = query.order("price", { ascending: false });
       break;
     case "brand_asc":
-      orderBy = "ORDER BY brand ASC";
+      query = query.order("brand", { ascending: true });
       break;
     case "brand_desc":
-      orderBy = "ORDER BY brand DESC";
+      query = query.order("brand", { ascending: false });
       break;
   }
 
-  // PRODUCTS
-  const [cars] = await db.query(
-    `SELECT * FROM products ${where} ${orderBy}`,
-    values
-  );
+  const { data: productsData, error: productsError } = await query;
 
-  const products = cars as Product[];
+  if (productsError) {
+    console.error(productsError);
+  }
 
-  // BRANDS
-  const [brandsRows] = await db.query(
-    `SELECT DISTINCT brand FROM products ORDER BY brand`
-  );
+  const products = (productsData || []) as Product[];
 
-  // MODELS (FIXED POSTGRES STYLE)
-  const [modelsRows] = await db.query(
-    brand
-      ? `SELECT DISTINCT model FROM products WHERE brand = $1 ORDER BY model`
-      : `SELECT DISTINCT model FROM products ORDER BY model`,
-    brand ? [brand] : []
-  );
+  // 🔹 BRANDS
+  const { data: brandsData } = await supabase
+    .from("products")
+    .select("brand");
 
-  const brands = (brandsRows as { brand: string }[]).map((b) => b.brand);
+  const brands = [
+    ...new Set((brandsData || []).map((b) => b.brand)),
+  ].sort();
 
-  const models = (modelsRows as { model: string }[]).map((m) => m.model);
+  // 🔹 MODELS
+  let modelsQuery = supabase.from("products").select("model");
+
+  if (brand) {
+    modelsQuery = modelsQuery.eq("brand", brand);
+  }
+
+  const { data: modelsData } = await modelsQuery;
+
+  const models = [
+    ...new Set((modelsData || []).map((m) => m.model)),
+  ].sort();
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">

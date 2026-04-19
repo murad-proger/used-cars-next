@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pg } from "@/lib/db/postgres";
+import { supabase } from "@/lib/supabaseClient";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 
@@ -10,15 +10,15 @@ type CartRow = {
   created_at: string;
 };
 
-type CartItemRow = {
+type CartItemWithProduct = {
   product_id: number;
   quantity: number;
-  price: number;
+  products: {
+    price: number;
+  }[];
 };
 
 export async function POST() {
-  const client = await pg.connect();
-
   try {
     const session = await getServerSession(authOptions);
 
@@ -28,56 +28,79 @@ export async function POST() {
 
     const userId = Number(session.user.id);
 
-    await client.query("BEGIN");
+    const { data: cartRows, error: cartError } = await supabase
+      .from("carts")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("status", "active");
 
-    const cartResult = await client.query<CartRow>(
-      `SELECT * FROM carts 
-       WHERE user_id = $1 AND status = 'active'
-       FOR UPDATE`,
-      [userId]
-    );
-
-    const cart: CartRow | undefined = cartResult.rows[0];
-
-    if (!cart) {
-      await client.query("ROLLBACK");
+    if (cartError) {
+      console.error(cartError);
       return NextResponse.json({ error: "Cart not found" }, { status: 404 });
     }
 
-    const itemsResult = await client.query<CartItemRow>(
-      `SELECT ci.product_id, ci.quantity, p.price
-       FROM cart_items ci
-       JOIN products p ON ci.product_id = p.id
-       WHERE ci.cart_id = $1`,
-      [cart.id]
-    );
+    const cart: CartRow | undefined = cartRows?.[0];
 
-    const items: CartItemRow[] = itemsResult.rows;
+    if (!cart) {
+      return NextResponse.json({ error: "Cart not found" }, { status: 404 });
+    }
 
-    if (items.length === 0) {
-      await client.query("ROLLBACK");
+    const { data: items, error: itemsError } = await supabase
+      .from("cart_items")
+      .select(`
+        product_id,
+        quantity,
+        products (
+          price
+        )
+      `)
+      .eq("cart_id", cart.id);
+
+    if (itemsError) {
+      console.error(itemsError);
       return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
     }
 
-    const total = items.reduce((sum: number, item: CartItemRow) => {
-      return sum + item.price * (item.quantity ?? 1);
+    const typedItems = items as CartItemWithProduct[];
+
+    if (!typedItems || typedItems.length === 0) {
+      return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
+    }
+
+    const total = typedItems.reduce((sum, item) => {
+      const price = item.products?.[0]?.price;
+      if (!price) return sum;
+
+      return sum + price * (item.quantity ?? 1);
     }, 0);
 
-    await client.query(
-      `UPDATE carts SET status = 'ordered' WHERE id = $1`,
-      [cart.id]
-    );
+    const { error: updateCartError } = await supabase
+      .from("carts")
+      .update({ status: "ordered" })
+      .eq("id", cart.id);
 
-    await client.query(
-      `UPDATE products 
-       SET added = 0 
-       WHERE id IN (
-         SELECT product_id FROM cart_items WHERE cart_id = $1
-       )`,
-      [cart.id]
-    );
+    if (updateCartError) {
+      console.error(updateCartError);
+      return NextResponse.json(
+        { error: "Checkout failed" },
+        { status: 500 }
+      );
+    }
 
-    await client.query("COMMIT");
+    const productIds = typedItems.map((i) => i.product_id);
+
+    const { error: updateProductsError } = await supabase
+      .from("products")
+      .update({ added: 0 })
+      .in("id", productIds);
+
+    if (updateProductsError) {
+      console.error(updateProductsError);
+      return NextResponse.json(
+        { error: "Checkout failed" },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
@@ -85,15 +108,11 @@ export async function POST() {
       total,
     });
   } catch (error) {
-    await client.query("ROLLBACK");
-
     console.error("CHECKOUT ERROR:", error);
 
     return NextResponse.json(
       { error: "Checkout failed" },
       { status: 500 }
     );
-  } finally {
-    client.release();
   }
 }

@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
-import { db } from "@/lib/db";
+import { supabase } from "@/lib/supabaseClient";
 
 type UserRow = {
   id: number;
@@ -19,23 +19,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
+
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const [rows] = await db.query<UserRow>(
-          "SELECT * FROM users WHERE email = $1 LIMIT 1",
-          [credentials.email],
-        );
-        const user = rows[0];
+        // поиск пользователя в supabase
+        const { data: users, error } = await supabase
+          .from("users")
+          .select("*")
+          .eq("email", credentials.email)
+          .limit(1);
+
+        if (error) {
+          console.error(error);
+          return null;
+        }
+
+        const user: UserRow | undefined = users?.[0];
+
         if (!user) return null;
 
         const isValid = await bcrypt.compare(
           credentials.password,
-          user.password,
+          user.password
         );
+
         if (!isValid) return null;
 
-        // Приводим id к строке!
         return {
           id: String(user.id),
           name: user.name,
@@ -54,10 +64,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.role = user.role;
+        token.role = (user as { role: "ADMIN" | "USER" }).role;
       }
       return token;
     },
+
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
@@ -67,12 +78,3 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
-
-/*
-Файлы, для оздания регистрации-авторизации и в целом бекенд движений:
-
-/auth.ts
-/next-auth.d.ts
-/app/api/auth (всё, что в нем етсть)
-
-*/

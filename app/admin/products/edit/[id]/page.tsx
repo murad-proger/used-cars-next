@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import ProductForm from "../../ProductForm";
-import { db } from "@/lib/db";
+import { supabase } from "@/lib/supabaseClient";
 import { Product } from "@/@types/product";
 
 type Props = { params: { id: string } };
@@ -22,7 +22,7 @@ type ProductRow = {
   steeringWheel: string;
   price: number;
   images: string;
-  description: string;
+  description: string | null;
   liked: number;
   popular: number;
   raiting: number;
@@ -36,49 +36,46 @@ export default async function EditProductPage({ params }: Props) {
     redirect("/");
   }
 
-  const { id: idParam } = await params;
+  const id = Number(params.id);
 
-  const id = Number(idParam);
   if (Number.isNaN(id)) {
     redirect("/admin/products");
   }
 
-  const [rows] = await db.execute<ProductRow>(
-    `
-    SELECT
-      id,
-      brand,
-      model,
-      year,
-      mileage,
-      displacement,
-      engineType,
-      transmission,
-      drivetrain,
-      bodyType,
-      color,
-      steeringWheel,
-      price,
-      images,
-      description,
-      liked,
-      popular,
-      raiting,
-      added
-    FROM products
-    WHERE id = $1
-    `,
-    [id],
-  );
+  // GET PRODUCT FROM SUPABASE
+  const { data: rows, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("id", id)
+    .limit(1);
 
-
-  if (rows.length === 0) {
+  if (error) {
+    console.error(error);
     redirect("/admin/products");
   }
 
-  const raw = rows[0];
+  const raw: ProductRow | undefined = rows?.[0];
 
-  // Преобразуем в Product
+  if (!raw) {
+    redirect("/admin/products");
+  }
+
+  // images normalization (string -> array)
+  let images: string[] = [];
+
+  if (raw.images) {
+    try {
+      const parsed = JSON.parse(raw.images);
+      images = Array.isArray(parsed)
+        ? parsed
+        : [String(raw.images)];
+    } catch {
+      images = String(raw.images)
+        .split(",")
+        .map((url) => url.trim());
+    }
+  }
+
   const product: Product = {
     id: raw.id,
     brand: raw.brand,
@@ -93,12 +90,8 @@ export default async function EditProductPage({ params }: Props) {
     color: raw.color,
     steeringWheel: raw.steeringWheel,
     price: raw.price,
-    images: raw.images
-      ? Array.isArray(raw.images)
-        ? raw.images // если массив
-        : [raw.images] // если просто строка
-      : [],
-    description: raw.description,
+    images,
+    description: raw.description ?? "",
     liked: raw.liked,
     popular: raw.popular,
     raiting: raw.raiting,
@@ -107,7 +100,10 @@ export default async function EditProductPage({ params }: Props) {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Редактировать продукт</h1>
+      <h1 className="text-2xl font-bold mb-4">
+        Редактировать продукт
+      </h1>
+
       <ProductForm mode="edit" product={product} />
     </div>
   );

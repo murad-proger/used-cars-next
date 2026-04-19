@@ -10,18 +10,23 @@ import { Product } from "@/@types/product";
 async function getCartProducts(): Promise<Product[]> {
   const cookieStore = await cookies();
 
-  const cookieHeader = cookieStore.getAll()
-    .map(cookie => `${cookie.name}=${cookie.value}`)
+  const cookieHeader = cookieStore
+    .getAll()
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
     .join("; ");
 
-  const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+  const baseUrl = process.env.NEXTAUTH_URL;
+
+  if (!baseUrl) {
+    throw new Error("NEXTAUTH_URL is not defined");
+  }
+  
   const res = await fetch(`${baseUrl}/api/cart`, {
     cache: "no-store",
     headers: {
       Cookie: cookieHeader,
     },
   });
-  
 
   if (!res.ok) {
     console.error("Failed to fetch cart", res.status);
@@ -49,7 +54,7 @@ export default async function CartPage() {
 
   const totalPrice = cartProducts.reduce(
     (sum, item) => sum + Number(item.price),
-    0
+    0,
   );
 
   return (
@@ -57,9 +62,7 @@ export default async function CartPage() {
       <main className="flex min-h-screen w-full max-w-7xl flex-col py-2 px-3 bg-white dark:bg-black">
         <BreadCrumbs />
 
-        <h1 className="font-bold text-3xl text-amber-600 mb-7">
-          Səbət
-        </h1>
+        <h1 className="font-bold text-3xl text-amber-600 mb-7">Səbət</h1>
 
         {cartProducts.length > 0 ? (
           <div className="flex w-full flex-col gap-5">
@@ -71,9 +74,7 @@ export default async function CartPage() {
             <CheckoutButton />
           </div>
         ) : (
-          <div className="text-gray-500 text-lg">
-            Səbətiniz boşdur
-          </div>
+          <div className="text-gray-500 text-lg">Səbətiniz boşdur</div>
         )}
       </main>
     </div>

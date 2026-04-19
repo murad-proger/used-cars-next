@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { supabase } from "@/lib/supabaseClient";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 
@@ -30,22 +30,42 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const [cartRows] = await db.query<CartRow>(
-      `SELECT * FROM carts WHERE user_id = $1 AND status = 'active'`,
-      [userId]
-    );
+    // GET ACTIVE CART
+    const { data: cartRows, error: cartError } = await supabase
+      .from("carts")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("status", "active");
 
-    let cart = cartRows[0];
-
-    if (!cart) {
-      const [created] = await db.query<CartRow>(
-        `INSERT INTO carts (user_id, status)
-         VALUES ($1, 'active')
-         RETURNING id, user_id, status, created_at`,
-        [userId]
+    if (cartError) {
+      console.error(cartError);
+      return NextResponse.json(
+        { error: "Internal Server Error" },
+        { status: 500 }
       );
+    }
 
-      cart = created[0];
+    let cart: CartRow | undefined = cartRows?.[0];
+
+    // CREATE CART IF NOT EXISTS
+    if (!cart) {
+      const { data: created, error: createError } = await supabase
+        .from("carts")
+        .insert({
+          user_id: userId,
+          status: "active",
+        })
+        .select("*")
+        .single();
+
+      if (createError || !created) {
+        return NextResponse.json(
+          { error: "Cart creation failed" },
+          { status: 500 }
+        );
+      }
+
+      cart = created;
     }
 
     if (!cart) {
@@ -55,23 +75,43 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const [existing] = await db.query<{ id: number }>(
-      `SELECT id FROM cart_items
-       WHERE cart_id = $1 AND product_id = $2`,
-      [cart.id, productId]
-    );
+    // CHECK IF ITEM EXISTS
+    const { data: existing } = await supabase
+      .from("cart_items")
+      .select("id")
+      .eq("cart_id", cart.id)
+      .eq("product_id", productId);
 
-    if (existing.length === 0) {
-      await db.query(
-        `INSERT INTO cart_items (cart_id, product_id)
-         VALUES ($1, $2)`,
-        [cart.id, productId]
-      );
+    if (!existing || existing.length === 0) {
+      // INSERT ITEM
+      const { error: insertError } = await supabase
+        .from("cart_items")
+        .insert({
+          cart_id: cart.id,
+          product_id: productId,
+        });
 
-      await db.query(
-        `UPDATE products SET added = 1 WHERE id = $1`,
-        [productId]
-      );
+      if (insertError) {
+        console.error(insertError);
+        return NextResponse.json(
+          { error: "Internal Server Error" },
+          { status: 500 }
+        );
+      }
+
+      // UPDATE PRODUCT FLAG
+      const { error: updateError } = await supabase
+        .from("products")
+        .update({ added: 1 })
+        .eq("id", productId);
+
+      if (updateError) {
+        console.error(updateError);
+        return NextResponse.json(
+          { error: "Internal Server Error" },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({ success: true });

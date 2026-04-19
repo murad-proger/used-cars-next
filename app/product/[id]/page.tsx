@@ -1,4 +1,3 @@
-import { db } from "@/lib/db";
 import { Product } from "@/@types/product";
 import { formatAZN } from "@/utils/formatAZN";
 import { notFound } from "next/navigation";
@@ -7,6 +6,9 @@ import AddToCartButton from "@/components/AddToCartButton";
 import LikeButton from "@/components/LikeButton";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { createClient } from "@supabase/supabase-js";
+
+export const dynamic = "force-dynamic";
 
 export default async function ProductPage({
   params,
@@ -20,16 +22,22 @@ export default async function ProductPage({
     notFound();
   }
 
-  const [rows] = await db.query(
-    "SELECT * FROM products WHERE id = $1 LIMIT 1",
-    [productId]
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  const product = (rows as Product[])[0];
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("id", productId)
+    .single();
 
-  if (!product) {
+  if (error || !data) {
     notFound();
   }
+
+  const product = data as Product;
 
   const session = await getServerSession(authOptions);
   const isLoggedIn = session?.user;
@@ -78,33 +86,15 @@ export default async function ProductPage({
               {isLoggedIn ? <AddToCartButton productId={productId} /> : ""}
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm text-gray-700 dark:text-gray-300 mb-6">
-              <div>
-                <b>Yürüş:</b> {mileage.toLocaleString()} km
-              </div>
-              <div>
-                <b>Kuzov:</b> {bodyType}
-              </div>
-              <div>
-                <b>Rəng:</b> {color}
-              </div>
-              <div>
-                <b>Sükan:</b> {steeringWheel}-hand
-              </div>
-              <div>
-                <b>Reytinq:</b> ⭐ {raiting}
-              </div>
-              <div>
-                <b>Mühərrik:</b> {displacement} L
-              </div>
-              <div>
-                <b>Yanacaq:</b> {engineType}
-              </div>
-              <div>
-                <b>Sürətlər qutusu:</b> {transmission}
-              </div>
-              <div>
-                <b>Ötürücü:</b> {drivetrain}
-              </div>
+              <div><b>Yürüş:</b> {mileage.toLocaleString()} km</div>
+              <div><b>Kuzov:</b> {bodyType}</div>
+              <div><b>Rəng:</b> {color}</div>
+              <div><b>Sükan:</b> {steeringWheel}-hand</div>
+              <div><b>Reytinq:</b> ⭐ {raiting}</div>
+              <div><b>Mühərrik:</b> {displacement} L</div>
+              <div><b>Yanacaq:</b> {engineType}</div>
+              <div><b>Sürətlər qutusu:</b> {transmission}</div>
+              <div><b>Ötürücü:</b> {drivetrain}</div>
             </div>
           </div>
         </div>

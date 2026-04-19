@@ -1,7 +1,7 @@
 import NextAuth, { AuthOptions, User } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
-import { db } from "@/lib/db";
+import { supabase } from "@/lib/supabaseClient";
 
 type UserRow = {
   id: number;
@@ -15,7 +15,6 @@ interface AuthUser extends User {
   role: "ADMIN" | "USER";
 }
 
-// Не меняем тип token, используем стандартный JWT
 export const authOptions: AuthOptions = {
   providers: [
     Credentials({
@@ -24,18 +23,31 @@ export const authOptions: AuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
+
       async authorize(credentials): Promise<AuthUser | null> {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const [rows] = await db.query<UserRow>(
-          "SELECT * FROM users WHERE email = $1 LIMIT 1",
-          [credentials.email]
-        );
+        // поиск пользователя в supabase
+        const { data: users, error } = await supabase
+          .from("users")
+          .select("*")
+          .eq("email", credentials.email)
+          .limit(1);
 
-        const user = rows[0];
+        if (error) {
+          console.error(error);
+          return null;
+        }
+
+        const user: UserRow | undefined = users?.[0];
+
         if (!user) return null;
 
-        const isValid = await bcrypt.compare(credentials.password, user.password);
+        const isValid = await bcrypt.compare(
+          credentials.password,
+          user.password
+        );
+
         if (!isValid) return null;
 
         return {
@@ -53,7 +65,7 @@ export const authOptions: AuthOptions = {
   },
 
   callbacks: {
-    // JWT callback — строго по типу NextAuth
+    // добавляем данные в jwt токен
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id as string;
@@ -64,6 +76,7 @@ export const authOptions: AuthOptions = {
       return token;
     },
 
+    // прокидываем данные в session
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
@@ -78,11 +91,3 @@ export const authOptions: AuthOptions = {
 
 const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST };
-
-/*
-Файлы, для оздания регистрации-авторизации и в целом бекенд движений:
-
-/auth.ts
-/next-auth.d.ts
-/app/api/auth (всё, что в нем етсть)
-*/

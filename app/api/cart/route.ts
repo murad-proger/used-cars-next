@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { supabase } from "@/lib/supabaseClient";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/route";
 import { Product } from "@/@types/product";
@@ -33,6 +33,10 @@ type ProductRow = {
   added: number;
 };
 
+type CartItemJoin = {
+  products: ProductRow[];
+};
+
 export async function GET() {
   const session = await getServerSession(authOptions);
 
@@ -45,28 +49,62 @@ export async function GET() {
 
   const userId = Number(session.user.id);
 
-  // 1. CART
-  const [cartRows] = await db.query<CartRow>(
-    `SELECT * FROM carts WHERE user_id = $1 AND status = 'active'`,
-    [userId]
-  );
+  // CART
+  const { data: cartRows, error: cartError } = await supabase
+    .from("carts")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("status", "active");
 
-  const cart = cartRows[0];
+  if (cartError) {
+    console.error(cartError);
+    return NextResponse.json({ items: [] });
+  }
+
+  const cart: CartRow | undefined = cartRows?.[0];
 
   if (!cart) {
     return NextResponse.json({ items: [] });
   }
 
-  // 2. PRODUCTS
-  const [itemsRows] = await db.query<ProductRow>(
-    `SELECT p.*
-     FROM cart_items ci
-     JOIN products p ON ci.product_id = p.id
-     WHERE ci.cart_id = $1`,
-    [cart.id]
-  );
+  // CART ITEMS + PRODUCTS
+  const { data: itemsRows, error: itemsError } = await supabase
+    .from("cart_items")
+    .select(`
+      products (
+        id,
+        brand,
+        model,
+        year,
+        mileage,
+        displacement,
+        engineType,
+        transmission,
+        drivetrain,
+        bodyType,
+        color,
+        steeringWheel,
+        price,
+        images,
+        description,
+        liked,
+        popular,
+        raiting,
+        added
+      )
+    `)
+    .eq("cart_id", cart.id);
 
-  const items: Product[] = itemsRows.map((row) => {
+  if (itemsError) {
+    console.error(itemsError);
+    return NextResponse.json({ items: [] });
+  }
+
+  const products = (itemsRows ?? [])
+    .flatMap((item) => (item as CartItemJoin).products)
+    .filter((p): p is ProductRow => p !== undefined);
+
+  const items: Product[] = products.map((row) => {
     let images: string[] = [];
 
     if (row.images) {

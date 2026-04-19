@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { createClient } from "@supabase/supabase-js";
 
 export async function PUT(req: NextRequest) {
-  // вытаскиваем id из URL
-  const url = req.nextUrl.pathname; // "/api/products/1"
-  const idStr = url.split("/").pop(); // берём последний сегмент
+  const url = req.nextUrl.pathname;
+  const idStr = url.split("/").pop();
   const id = Number(idStr);
 
   if (Number.isNaN(id)) {
@@ -13,6 +12,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json();
+
     const {
       brand,
       model,
@@ -31,25 +31,14 @@ export async function PUT(req: NextRequest) {
       raiting,
     } = body;
 
-    await db.execute(
-      `UPDATE products
-      SET brand=$1,
-          model=$2,
-          year=$3,
-          mileage=$4,
-          displacement=$5,
-          engineType=$6,
-          transmission=$7,
-          drivetrain=$8,
-          bodyType=$9,
-          color=$10,
-          steeringWheel=$11,
-          price=$12,
-          images=$13,
-          description=$14,
-          raiting=$15
-      WHERE id=$16`,
-      [
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
+    const { error } = await supabase
+      .from("products")
+      .update({
         brand,
         model,
         year,
@@ -62,17 +51,27 @@ export async function PUT(req: NextRequest) {
         color,
         steeringWheel,
         price,
-        JSON.stringify(images),
+        images, // ⚠️ см. ниже
         description,
         raiting,
-        id,
-      ]
-    );
+      })
+      .eq("id", id);
+
+    if (error) {
+      console.error(error);
+      return NextResponse.json(
+        { error: "Ошибка при обновлении продукта" },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ message: "Продукт обновлён" });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Ошибка при обновлении продукта" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Ошибка при обновлении продукта" },
+      { status: 500 }
+    );
   }
 }
 
@@ -86,13 +85,30 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    await db.execute(
-      "DELETE FROM products WHERE id=$1",
-      [id]
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
+
+    const { error } = await supabase
+      .from("products")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error(error);
+      return NextResponse.json(
+        { error: "Ошибка при удалении продукта" },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json({ message: "Продукт удалён" });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Ошибка при удалении продукта" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Ошибка при удалении продукта" },
+      { status: 500 }
+    );
   }
 }
