@@ -47,8 +47,8 @@ export default function Header() {
   return (
     <>
       <header className="w-full border-b bg-white dark:bg-zinc-900 z-10 relative">
-        <div className="max-w-7xl mx-auto px-3 py-2 flex sm:flex-nowrap flex-wrap items-center justify-between">
-          <Link className="text-2xl text-amber-600 font-bold mb-2 sm:mb-0" href="/">
+        <div className="max-w-7xl mx-auto px-3 py-2 flex gap-3 sm:flex-nowrap flex-wrap items-center justify-between">
+          <Link className="text-2xl text-amber-600 font-bold" href="/">
             used-cars
           </Link>
 
@@ -71,7 +71,7 @@ export default function Header() {
             })}
           </nav>
 
-          <div className="flex items-center gap-3 mt-2 sm:mt-0">
+          <div className="flex items-center gap-3">
             {session?.user ? (
               <Link href="/cart" className="relative text-2xl">
                 🛒
