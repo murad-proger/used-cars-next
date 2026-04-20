@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. GET OR CREATE CART (active)
+    // GET OR CREATE CART (active)
     const { data: cartRows, error: cartError } = await supabase
       .from("carts")
       .select("id")
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       cart = created;
     }
 
-    // 2. CHECK EXISTING ITEM (NO cart_items.id USED)
+    // check existing item
     const { data: existing, error: existingError } = await supabase
       .from("cart_items")
       .select("quantity")
@@ -81,7 +81,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. UPSERT LOGIC (clean version)
     if (existing) {
       const { error: updateError } = await supabase
         .from("cart_items")

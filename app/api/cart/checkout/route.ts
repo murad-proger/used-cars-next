@@ -57,7 +57,7 @@ export async function POST() {
       );
     }
 
-    // ✔ FIX: правильная проверка пустой корзины
+    // проверка пустой корзины
     if (!items || items.length === 0) {
       return NextResponse.json(
         { error: "Cart is empty" },

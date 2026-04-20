@@ -96,7 +96,7 @@ export default async function Catalog({
 
   const products = (productsData || []) as Product[];
 
-  // 🔹 BRANDS
+  // бренды
   const { data: brandsData } = await supabase
     .from("products")
     .select("brand");
@@ -105,7 +105,7 @@ export default async function Catalog({
     ...new Set((brandsData || []).map((b) => b.brand)),
   ].sort();
 
-  // 🔹 MODELS (FIXED LOGIC)
+  // модели
   const { data: modelsData } = brand
     ? await supabase
         .from("products")

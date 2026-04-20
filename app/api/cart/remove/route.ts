@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. GET ACTIVE CART (safe version)
+    // GET ACTIVE CART
     const { data: cart, error: cartError } = await supabase
       .from("carts")
       .select("id")
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. DELETE ITEM FROM CART (composite key only)
+    // DELETE ITEM FROM CART
     const { error: deleteError } = await supabase
       .from("cart_items")
       .delete()
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. UPDATE PRODUCT STATE (optional business flag)
+    // UPDATE PRODUCT STATE
     const { error: updateError } = await supabase
       .from("products")
       .update({ added: 0 })

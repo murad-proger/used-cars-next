@@ -12,7 +12,7 @@ export async function GET() {
 
   const userId = Number(session.user.id);
 
-  // 1. GET ACTIVE CART
+  // ACTIVE CART
   const { data: cart, error: cartError } = await supabase
     .from("carts")
     .select("id")
@@ -24,7 +24,7 @@ export async function GET() {
     return NextResponse.json({ count: 0 });
   }
 
-  // 2. COUNT ITEMS
+  // COUNT ITEMS
   const { count, error: countError } = await supabase
     .from("cart_items")
     .select("*", { count: "exact", head: true })

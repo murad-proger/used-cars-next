@@ -27,7 +27,6 @@ export async function POST(req: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // IMPORTANT: no pre-check select (avoids race condition)
     const { data, error } = await supabase
       .from("users")
       .insert({
@@ -38,11 +37,7 @@ export async function POST(req: NextRequest) {
       })
       .select("id, email");
 
-    // DEBUG LOG (важно для твоего кейса сейчас)
-    console.log("REGISTER RESULT:", { data, error });
-
     if (error) {
-      // Supabase unique violation
       if (error.code === "23505") {
         return NextResponse.json(
           { message: "User already exists" },
@@ -56,7 +51,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // sanity check
     if (!data || data.length === 0) {
       return NextResponse.json(
         { message: "User not created" },

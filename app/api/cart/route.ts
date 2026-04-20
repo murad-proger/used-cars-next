@@ -49,7 +49,7 @@ export async function GET() {
 
   const userId = Number(session.user.id);
 
-  // ✔ FIX: выбираем ВСЕ поля под CartRow
+  // выбираем ВСЕ поля под CartRow
   const { data: cartRows, error: cartError } = await supabase
     .from("carts")
     .select("id, user_id, status, created_at")
