@@ -17,7 +17,7 @@ export default function Header() {
   const menu = [
     { name: "Əsas Səhifə", href: "/" },
     { name: "Kataloq", href: "/catalog" },
-    ...(session?.user?.role === "ADMIN" ? [{ name: "Admin Kabineti", href: "/admin" }] : []),
+    ...(session?.user?.role === "ADMIN" ? [{ name: "Admin", href: "/admin" }] : []),
   ];
 
   // Fetch количества товаров в корзине
@@ -47,12 +47,12 @@ export default function Header() {
   return (
     <>
       <header className="w-full border-b bg-white dark:bg-zinc-900 z-10 relative">
-        <div className="max-w-7xl mx-auto px-3 py-2 flex flex-col sm:flex-row items-center justify-between">
+        <div className="max-w-7xl mx-auto px-3 py-2 flex sm:flex-nowrap flex-wrap items-center justify-between">
           <Link className="text-2xl text-amber-600 font-bold mb-2 sm:mb-0" href="/">
             used-cars
           </Link>
 
-          <nav className="flex flex-col sm:flex-row items-center gap-2 sm:gap-6">
+          <nav className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto order-3 sm:order-0 justify-center sm:justify-start flex-wrap sm:flex-nowrap">
             {menu.map((item) => {
               const isActive = pathname === item.href;
               return (
