@@ -88,7 +88,7 @@ export default function CustomSelect(props: CustomSelectProps) {
   };
 
   return (
-    <div ref={ref} className="relative z-20">
+    <div ref={ref} className="relative">
       <span className="text-sm font-semibold">{label}</span>
 
       <button
